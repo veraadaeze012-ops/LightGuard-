@@ -17,7 +17,7 @@
 <!-- Firebase SDK -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged }
+  import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, signOut, onAuthStateChanged }
     from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
   import { getFirestore, collection, doc, onSnapshot, addDoc, query,
     orderBy, limit, setDoc, getDoc, serverTimestamp, updateDoc }
@@ -39,7 +39,7 @@
   const auth = getAuth(app);
   const db   = getFirestore(app);
 
-  window._lg = { auth, db, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut,
+  window._lg = { auth, db, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, signOut,
     onAuthStateChanged, collection, doc, onSnapshot, addDoc,
     query, orderBy, limit, setDoc, getDoc, serverTimestamp, updateDoc };
 </script>
@@ -255,6 +255,17 @@ a      { color: inherit; text-decoration: none; }
 }
 #signup-btn:hover { border-color: var(--white3); }
 #signup-btn:disabled { opacity:.4; }
+
+#reset-btn {
+  width: 100%; padding: 14px;
+  background: transparent; color: var(--white);
+  font-family: var(--font-disp); font-size: 18px; letter-spacing:.12em;
+  border-radius: var(--r); margin-top: 4px;
+  border: 1px solid var(--border2);
+  transition: all .2s;
+}
+#reset-btn:hover { border-color: var(--white3); }
+#reset-btn:disabled { opacity:.4; }
 
 .auth-toggle {
   text-align:center; margin-top:18px;
@@ -669,6 +680,24 @@ a      { color: inherit; text-decoration: none; }
     <p id="login-error"></p>
     <div class="auth-toggle">
       <span id="auth-toggle-link">Don't have an account? Sign up</span>
+      &nbsp;·&nbsp;
+      <span id="forgot-link">Forgot password?</span>
+    </div>
+
+    <!-- Forgot password form (hidden by default) -->
+    <div id="forgot-form" style="display:none;margin-top:18px;border-top:1px solid var(--border2);padding-top:20px;">
+      <p style="font-size:12px;color:var(--white2);font-family:var(--font-mono);margin-bottom:14px;line-height:1.6;">
+        Enter your email and we'll send you a reset link.
+      </p>
+      <div class="field">
+        <label>Email</label>
+        <input type="email" id="reset-email" placeholder="you@example.com" autocomplete="email"/>
+      </div>
+      <button id="reset-btn">SEND RESET LINK</button>
+      <p id="reset-msg" style="font-size:12px;margin-top:12px;font-family:var(--font-mono);text-align:center;"></p>
+      <div class="auth-toggle" style="margin-top:10px;">
+        <span id="back-to-login">← Back to sign in</span>
+      </div>
     </div>
   </div>
 </div>
@@ -1025,7 +1054,7 @@ function waitForFirebase(cb) {
 }
 
 waitForFirebase(() => {
-  const { auth, db, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged,
+  const { auth, db, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, signOut, onAuthStateChanged,
     collection, doc, onSnapshot, addDoc, query, orderBy, limit,
     setDoc, getDoc, serverTimestamp, updateDoc } = window._lg;
 
@@ -1082,6 +1111,52 @@ waitForFirebase(() => {
 
   loginBtn.addEventListener('click', handleAuth);
   signupBtn.addEventListener('click', handleAuth);
+
+  /* ── FORGOT PASSWORD ── */
+  function showForgotForm() {
+    document.getElementById('login-btn').style.display   = 'none';
+    document.getElementById('signup-btn').style.display  = 'none';
+    document.querySelectorAll('.field').forEach(f => f.style.display = 'none');
+    document.getElementById('auth-toggle-link').parentElement.style.display = 'none';
+    document.getElementById('forgot-form').style.display = 'block';
+    document.getElementById('login-error').textContent   = '';
+    document.getElementById('reset-email').value = document.getElementById('login-email').value || '';
+  }
+
+  function hideForgotForm() {
+    document.getElementById('forgot-form').style.display = 'none';
+    document.querySelectorAll('.field').forEach(f => f.style.display = 'block');
+    document.getElementById('login-btn').style.display   = isSignUp ? 'none'  : 'block';
+    document.getElementById('signup-btn').style.display  = isSignUp ? 'block' : 'none';
+    document.getElementById('auth-toggle-link').parentElement.style.display = 'block';
+    document.getElementById('reset-msg').textContent     = '';
+  }
+
+  document.getElementById('forgot-link').addEventListener('click', showForgotForm);
+  document.getElementById('back-to-login').addEventListener('click', hideForgotForm);
+
+  document.getElementById('reset-btn').addEventListener('click', async () => {
+    const email   = document.getElementById('reset-email').value.trim();
+    const btn     = document.getElementById('reset-btn');
+    const msg     = document.getElementById('reset-msg');
+    if (!email) { msg.style.color = 'var(--red)'; msg.textContent = 'Please enter your email.'; return; }
+    btn.disabled = true; btn.textContent = 'SENDING…';
+    try {
+      await sendPasswordResetEmail(auth, email);
+      msg.style.color   = 'var(--green)';
+      msg.textContent   = '✓ Reset link sent! Check your inbox.';
+      btn.textContent   = 'SENT';
+    } catch(e) {
+      msg.style.color   = 'var(--red)';
+      msg.textContent   = friendlyError(e.code);
+      btn.disabled      = false;
+      btn.textContent   = 'SEND RESET LINK';
+    }
+  });
+
+  document.getElementById('reset-email').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('reset-btn').click();
+  });
 
   document.getElementById('login-email').addEventListener('keydown', e => { if(e.key==='Enter') handleAuth(); });
   document.getElementById('login-password').addEventListener('keydown', e => { if(e.key==='Enter') handleAuth(); });
